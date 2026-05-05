@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Sanal ortam
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Çevre değişkenleri
+.env
+
+# Model dosyaları (büyük olduğu için git'e koymayız)
+*.h5
+*.pth
+*.pt
+*.onnx
+models/
+
+# Test çıktıları
+*.log
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
