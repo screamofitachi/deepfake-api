@@ -13,9 +13,12 @@ Endpoint'ler:
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.responses import JSONResponse
 
 from model_loader import load_model, get_model_info, is_model_loaded
+from predictor import predict as run_prediction
+
 
 
 # ============================================================
@@ -109,3 +112,70 @@ def health_check():
         "model_ready": model_loaded,
         "model_info": get_model_info() if model_loaded else None,
     }
+
+
+@app.post("/predict")
+async def predict_endpoint(file: UploadFile = File(...)):
+    """
+    Yüklenen görselin gerçek mi yoksa deepfake mi olduğunu tahmin eder.
+    
+    **Parametreler:**
+    - `file`: Görsel dosyası (JPG, PNG, JPEG)
+    
+    **Cevap:**
+```json
+    {
+        "label": "Real" | "Deepfake",
+        "confidence": 0.99,
+        "is_deepfake": false,
+        "raw_score": 0.0029,
+        "processing_time_ms": 387.4,
+        "filename": "test.jpg"
+    }
+```
+    """
+    # 1. Model yüklü mü kontrol et
+    if not is_model_loaded():
+        raise HTTPException(
+            status_code=503,
+            detail="Model henüz yüklenmedi. Lütfen birkaç saniye sonra tekrar deneyin."
+        )
+    
+    # 2. Dosyanın içeriğini oku
+    try:
+        image_bytes = await file.read()
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Dosya okunamadı: {str(e)}"
+        )
+    
+    # 3. Boş dosya kontrolü
+    if len(image_bytes) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Yüklenen dosya boş."
+        )
+    
+    # 4. Tahmin yap
+    try:
+        result = run_prediction(image_bytes)
+    except ValueError as e:
+        # Görsel hatası (bozuk dosya, geçersiz format vb.)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Görsel işlenemedi: {str(e)}"
+        )
+    except RuntimeError as e:
+        # Model hatası (beklenmedik durum)
+        logger.error(f"Model hatası: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Tahmin sırasında bir hata oluştu. Lütfen tekrar deneyin."
+        )
+    
+    # 5. Dosya adını da response'a ekle
+    result["filename"] = file.filename
+    
+    # 6. Başarılı cevabı dön
+    return result
