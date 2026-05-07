@@ -22,6 +22,7 @@ ENV/
 *.pth
 *.pt
 *.onnx
+*.keras
 models/
 
 # Test çıktıları
@@ -31,3 +32,8 @@ models/
 # OS
 .DS_Store
 Thumbs.db
+
+# Test dosyaları
+test.jpg
+test.jpeg
+test.png
