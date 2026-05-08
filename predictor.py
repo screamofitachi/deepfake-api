@@ -13,7 +13,6 @@ Pipeline:
 7. Threshold uygula → label + confidence
 """
 
-import io
 import time
 import logging
 from typing import Dict, Any
@@ -25,49 +24,11 @@ from model_loader import (
     get_model,
     CLASS_NAMES,
     THRESHOLD,
-    INPUT_SIZE,
 )
+from image_processor import preprocess_image
+
 
 logger = logging.getLogger(__name__)
-
-
-def preprocess_image(image_bytes: bytes) -> np.ndarray:
-    """
-    Bytes verisini modele uygun NumPy array'e dönüştürür.
-    
-    Args:
-        image_bytes: Görsel dosyasının ham byte verisi
-    
-    Returns:
-        Shape: (1, 224, 224, 3), dtype: float32, range: [0-255] (HAM)
-    
-    Raises:
-        ValueError: Görsel açılamazsa veya bozuksa
-    """
-    try:
-        # Bytes'i PIL Image'a çevir
-        img = Image.open(io.BytesIO(image_bytes))
-        
-        # RGB'ye çevir (RGBA, grayscale gelirse normalize)
-        img = img.convert("RGB")
-        
-        # Modelin beklediği boyuta resize et (LANCZOS = en kaliteli algoritma)
-        img = img.resize(INPUT_SIZE, Image.Resampling.LANCZOS)
-        
-        # NumPy array'e çevir, float32 yap
-        # ÖNEMLİ: [0-255] aralığında BIRAK, normalize ETME!
-        # EfficientNetV2M built-in preprocessing içerir.
-        arr = np.array(img, dtype=np.float32)
-        
-        # Batch dimension ekle: (224, 224, 3) → (1, 224, 224, 3)
-        arr = np.expand_dims(arr, axis=0)
-        
-        return arr
-    
-    except UnidentifiedImageError:
-        raise ValueError("Yüklenen dosya geçerli bir görsel değil.")
-    except Exception as e:
-        raise ValueError(f"Görsel işlenirken hata: {str(e)}")
 
 
 def predict(image_bytes: bytes) -> Dict[str, Any]:
