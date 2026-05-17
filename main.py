@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from model_loader import load_model, get_model_info, is_model_loaded
 from predictor import predict as run_prediction
@@ -76,6 +77,38 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ============================================================
+# CORS Yapılandırması (SCRUM-27)
+# ============================================================
+# Frontend'in farklı domain/port'lardan API'ye erişebilmesi için
+# CORS izinleri yapılandırıldı.
+
+# İzin verilen origin'ler (frontend'in çalışacağı adresler)
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",      # React varsayılan dev port
+    "http://localhost:3001",      # React alternatif port
+    "http://localhost:5173",      # Vite (Vue/React) varsayılan
+    "http://localhost:5174",      # Vite alternatif
+    "http://localhost:8080",      # Vue CLI varsayılan
+    "http://localhost:4200",      # Angular varsayılan
+    "http://127.0.0.1:3000",      # localhost'un IP versiyonu
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8080",
+    # Production frontend domain'i eklendiğinde buraya yazılacak
+    # Örnek: "https://deepfake-detector.example.com"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,           # İzinli adresler
+    allow_credentials=True,                   # Cookie/auth header desteği
+    allow_methods=["GET", "POST", "OPTIONS"], # İzinli HTTP metodları
+    allow_headers=["*"],                      # Tüm header'lar (Content-Type vb.)
+    max_age=600,                              # Preflight cache süresi (saniye)
+)
+
+logger.info(f"CORS yapılandırıldı: {len(ALLOWED_ORIGINS)} origin izinli")
+
 
 # ============================================================
 # Endpoint'ler
@@ -112,7 +145,9 @@ def health_check():
     "model_ready": model_loaded,
     "model_info": get_model_info() if model_loaded else None,
     "validation_rules": get_validation_info(),
-    }
+    "cors_enabled": True,
+    "allowed_origins": ALLOWED_ORIGINS,
+}
 
 
 @app.post("/predict")
