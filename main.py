@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 
 from model_loader import load_model, get_model_info, is_model_loaded
 from predictor import predict as run_prediction
-
+from validators import validate_upload, get_validation_info
 
 
 # ============================================================
@@ -107,10 +107,11 @@ def health_check():
     model_loaded = is_model_loaded()
     
     return {
-        "status": "ok" if model_loaded else "degraded",
-        "api_ready": True,
-        "model_ready": model_loaded,
-        "model_info": get_model_info() if model_loaded else None,
+    "status": "ok" if model_loaded else "degraded",
+    "api_ready": True,
+    "model_ready": model_loaded,
+    "model_info": get_model_info() if model_loaded else None,
+    "validation_rules": get_validation_info(),
     }
 
 
@@ -120,9 +121,9 @@ async def predict_endpoint(file: UploadFile = File(...)):
     Yüklenen görselin gerçek mi yoksa deepfake mi olduğunu tahmin eder.
     
     **Parametreler:**
-    - `file`: Görsel dosyası (JPG, PNG, JPEG)
+    - `file`: Görsel dosyası (JPG, PNG, JPEG, max 10 MB)
     
-    **Cevap:**
+    **Cevap (200 OK):**
 ```json
     {
         "label": "Real" | "Deepfake",
@@ -133,6 +134,13 @@ async def predict_endpoint(file: UploadFile = File(...)):
         "filename": "test.jpg"
     }
 ```
+    
+    **Hata Kodları:**
+    - `400`: Dosya boş, bozuk veya geçersiz görsel
+    - `413`: Dosya çok büyük (>10 MB)
+    - `415`: Format desteklenmiyor (PDF, TXT vb.)
+    - `503`: Model henüz yüklenmedi
+    - `500`: Beklenmedik sunucu hatası
     """
     # 1. Model yüklü mü kontrol et
     if not is_model_loaded():
@@ -150,24 +158,23 @@ async def predict_endpoint(file: UploadFile = File(...)):
             detail=f"Dosya okunamadı: {str(e)}"
         )
     
-    # 3. Boş dosya kontrolü
-    if len(image_bytes) == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Yüklenen dosya boş."
-        )
+    # 3. Tüm validasyonları çalıştır (uzantı, MIME, boyut, içerik)
+    # Hata varsa otomatik HTTPException fırlatır (415, 413, 400)
+    validate_upload(
+        filename=file.filename,
+        content_type=file.content_type,
+        image_bytes=image_bytes,
+    )
     
     # 4. Tahmin yap
     try:
         result = run_prediction(image_bytes)
     except ValueError as e:
-        # Görsel hatası (bozuk dosya, geçersiz format vb.)
         raise HTTPException(
             status_code=400,
             detail=f"Görsel işlenemedi: {str(e)}"
         )
     except RuntimeError as e:
-        # Model hatası (beklenmedik durum)
         logger.error(f"Model hatası: {e}")
         raise HTTPException(
             status_code=500,
